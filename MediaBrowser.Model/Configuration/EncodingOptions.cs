@@ -60,7 +60,7 @@ public class EncodingOptions
         AllowAv1Encoding = false;
         EnableSubtitleExtraction = true;
         SubtitleExtractionTimeoutMinutes = 30;
-        AllowOnDemandMetadataBasedKeyframeExtractionForExtensions = ["mkv"];
+        AllowOnDemandMetadataBasedKeyframeExtractionForExtensions = ["mkv", "mp4"];
         HardwareDecodingCodecs = ["h264", "vc1"];
         HlsAudioSeekStrategy = HlsAudioSeekStrategy.TrimCopiedAudio;
     }
@@ -301,7 +301,7 @@ public class EncodingOptions
     public string[] HardwareDecodingCodecs { get; set; }
 
     /// <summary>
-    /// Gets or sets the file extensions on-demand metadata based keyframe extraction is enabled for.
+    /// Gets or sets the file extensions on-demand keyframe extraction is enabled for.
     /// </summary>
     public string[] AllowOnDemandMetadataBasedKeyframeExtractionForExtensions { get; set; }
 

@@ -1,6 +1,13 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using Jellyfin.MediaEncoding.Hls.Extractors;
 using Jellyfin.MediaEncoding.Hls.Playlist;
 using Jellyfin.MediaEncoding.Keyframes;
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Configuration;
+using MediaBrowser.Model.Configuration;
+using Moq;
 using Xunit;
 
 namespace Jellyfin.MediaEncoding.Hls.Tests.Playlist
@@ -26,6 +33,42 @@ namespace Jellyfin.MediaEncoding.Hls.Tests.Playlist
         {
             var keyframeData = new KeyframeData(MsToTicks(9900), new[] { 0L, MsToTicks(5000), MsToTicks(10000) });
             Assert.Equal(new[] { 10.0 }, DynamicHlsPlaylistGenerator.ComputeSegments(keyframeData, 6000));
+        }
+
+        [Fact]
+        public void CreateMainPlaylist_Mp4Remux_UsesIrregularKeyframeSchedule()
+        {
+            // Real E09 validation observed copied-video segment 36 starting at
+            // 223.514958 even though the equal-length fallback advertised 216.0.
+            var keyframes = Enumerable.Range(0, 36)
+                .Select(i => TimeSpan.FromSeconds(i * 6).Ticks)
+                .Append(2_235_149_580L)
+                .ToArray();
+            var keyframeData = new KeyframeData(TimeSpan.FromSeconds(240).Ticks, keyframes);
+            var extractor = new TestKeyframeExtractor(keyframeData, isMetadataBased: false);
+            var configurationManager = new Mock<IServerConfigurationManager>();
+            configurationManager
+                .Setup(i => i.GetConfiguration("encoding"))
+                .Returns(new EncodingOptions
+                {
+                    AllowOnDemandMetadataBasedKeyframeExtractionForExtensions = ["mp4"]
+                });
+            var generator = new DynamicHlsPlaylistGenerator(configurationManager.Object, [extractor]);
+            var request = new CreateMainPlaylistRequest(
+                Guid.NewGuid(),
+                "/media/e09.mp4",
+                6000,
+                TimeSpan.FromSeconds(240).Ticks,
+                "mp4",
+                "hls1/main/",
+                "?test=1",
+                true);
+
+            var playlist = generator.CreateMainPlaylist(request);
+
+            Assert.Equal(1, extractor.ExtractionCount);
+            Assert.Contains("hls1/main/36.mp4?test=1&runtimeTicks=2235149580", playlist, StringComparison.Ordinal);
+            Assert.DoesNotContain("hls1/main/36.mp4?test=1&runtimeTicks=2160000000", playlist, StringComparison.Ordinal);
         }
 
         [Theory]
@@ -104,5 +147,27 @@ namespace Jellyfin.MediaEncoding.Hls.Tests.Playlist
         }
 
         private static long MsToTicks(int value) => TimeSpan.FromMilliseconds(value).Ticks;
+
+        private sealed class TestKeyframeExtractor : IKeyframeExtractor
+        {
+            private readonly KeyframeData _keyframeData;
+
+            public TestKeyframeExtractor(KeyframeData keyframeData, bool isMetadataBased)
+            {
+                _keyframeData = keyframeData;
+                IsMetadataBased = isMetadataBased;
+            }
+
+            public bool IsMetadataBased { get; }
+
+            public int ExtractionCount { get; private set; }
+
+            public bool TryExtractKeyframes(Guid itemId, string filePath, [NotNullWhen(true)] out KeyframeData? keyframeData)
+            {
+                ExtractionCount++;
+                keyframeData = _keyframeData;
+                return true;
+            }
+        }
     }
 }

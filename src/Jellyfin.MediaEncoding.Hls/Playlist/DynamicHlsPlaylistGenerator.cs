@@ -27,7 +27,7 @@ public class DynamicHlsPlaylistGenerator : IDynamicHlsPlaylistGenerator
     public DynamicHlsPlaylistGenerator(IServerConfigurationManager serverConfigurationManager, IEnumerable<IKeyframeExtractor> extractors)
     {
         _serverConfigurationManager = serverConfigurationManager;
-        _extractors = extractors.Where(e => e.IsMetadataBased).ToArray();
+        _extractors = extractors.OrderByDescending(e => e.IsMetadataBased).ToArray();
     }
 
     /// <inheritdoc />
